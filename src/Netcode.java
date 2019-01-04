@@ -1,52 +1,38 @@
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.Socket;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public class Netcode extends Thread {
 
-    private Socket socket;
+    private Server server;
+    private ChatConnection chatConnection;
 
-    Netcode(Socket socket) {
-        this.socket = socket;
+    Netcode(Server server, ChatConnection chatConnection) {
+        this.server = server;
+        this.chatConnection = chatConnection;
     }
 
     @Override
     public void run() {
-        System.out.println("Client connected (Thread#" + this.getId() + ")");
-        try {
-            BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            PrintWriter output = new PrintWriter(socket.getOutputStream(),true);
+        String message;
 
-            while (true) {
-                String echoString = input.readLine();
-                System.out.println("Thread#" + this.getId() + ": " + echoString);
-                if (echoString.equals("exit"))
+        BufferedReader input = chatConnection.getInputBufferedReader();
+
+        try {
+            while(true) {
+                message = input.readLine();
+                //TODO: Need better disconnection/closing handle.
+                if(message.equals("exit"))
                     break;
-                echoString = printDate() + " Thread#" + this.getId() + ": " + echoString;
-                output.println(echoString);
+                else
+                    server.sendMessage(message, chatConnection);
             }
         }
-        catch (IOException exception) {
-            System.out.println("Server error: " + exception.getMessage());
+        catch(IOException error) {
+            System.out.println("Server error: " + error.getMessage());
         }
         finally {
-            try {
-                socket.close();
-            }
-            catch (IOException exception) {
-                System.out.println("Server error: " + exception.getMessage());
-            }
+            server.closeConnection(chatConnection);
+            chatConnection.closeConnection();
         }
-    }
-
-    private String printDate() {
-        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-        Date date = new Date();
-        return dateFormat.format(date);
     }
 }
