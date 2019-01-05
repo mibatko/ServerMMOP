@@ -13,7 +13,7 @@ public class Server {
     private List<ChatConnection> connections;
 
     public static void main(String[] args) {
-        Server chatServer = new Server(6045);
+        Server chatServer = new Server(60321);
         chatServer.startServer();
     }
 
@@ -25,7 +25,7 @@ public class Server {
 
     private void startServer() {
         try {
-            ServerSocket serverSocket = new ServerSocket(6045);
+            ServerSocket serverSocket = new ServerSocket(this.port);
             System.out.println("Started MMOP Server using port " + this.port);
 
             //TODO: Check if there's a better way of handling infinite loop
