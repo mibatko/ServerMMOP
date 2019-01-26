@@ -6,91 +6,108 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.sql.*;
 
-//Główna klasa aplikacji
 public class Server {
 
     private int port;
     private List<ChatConnection> connections;
+    private Connection dbConnection;
 
     private static final int DEFAULT_PORT = 60321;
 
     public static void main(String[] args) {
-        //Utworzenie głównej instancji klasy Server z użyciem wybranego portu
         Server chatServer = new Server(DEFAULT_PORT);
-        //Uruchomienie serwera
         chatServer.startServer();
     }
 
-    //Konstruktor
     private Server(int port) {
-        //Ustawienie portu
         this.port = port;
-        //Utworzenie tablicy, zawierającej wszytskie nawiązane połączenia z klientami
-        //TODO: Check if <> is better then using explicit type
         this.connections = new ArrayList<ChatConnection>();
     }
 
     private void startServer() {
-        //Kod zawarty w bloku try-catch by złapać możliwy wyjątek IOException - wymagane z uwagi na używane klasy/metody
         try {
-            //Utworzenie gniazda sieciowego serwera na odpowiednim porcie
             ServerSocket serverSocket = new ServerSocket(this.port);
             System.out.println("Started MMOP Server using port " + this.port);
 
-            //Nieskończona pętla obsługująca nowe nadchodzące połączenia
-            //TODO: Check if there's a better way of handling infinite loop
+            connectToDB();
+
             while(true) {
-                //Zapisanie referencji na temat nadchodzącego połączenia
                 Socket incomingConnection = serverSocket.accept();
 
                 System.out.println("New connection established with: " + incomingConnection.getInetAddress().getHostAddress());
 
-                //Utworzenie nowej instancji klasy ChatConnection reprezentującej nowo ustanowione połączenie
                 ChatConnection newChatConnection = new ChatConnection(incomingConnection);
-                //Dodanie nowego połączenia to tablicy istniejącyhc połączeń
-                //TODO: Add option for connection that sends username in first message.
                 this.connections.add(newChatConnection);
 
-                //Wysłanie wiadomości powitalnej do klienta który właśnie się połączył
-                //TODO: Add info for other users that someone joined.
-                newChatConnection.getOutputPrintWriter().println("Welcome to MMOP Server! User count: " + newChatConnection.getNumberOfConnections());
+                sendSystemMessageToAll(newChatConnection.getUsername() + " joined MMOP server. Welcome! Current user count: " + newChatConnection.getNumberOfConnections());
 
-                //Utworzenie nowej instancji klasy Netcode, która pozwala wielowątkowo obsługiwać nowe połączenie
-                //W tym wypadku jest to klasa dziedzicząca po klasie Thread, dlatego po utowrzeniu wywołujemy metodę start()
                 Netcode netcode = new Netcode(this, newChatConnection);
                 netcode.start();
             }
         }
-        //Obsługa wyjątku poprzez wydrukowanie treści błędu do konsoli
         catch(IOException error) {
             System.out.println("Server error: " + error.getMessage());
         }
     }
 
-    //Głowne działąnie serwera - pozwól klientom na zlecenie rozesłania wiadomości do wszytskich
-    //Metoda rozsyłająca wiadomość do wszytskich aktualnie połączonych klientów.
-    void sendMessage(String message, ChatConnection sender) {
-        //Pętla for-each powtarzająca ten sam kod dla każdego aktualnie podłączonego klienta
+    void sendChatMessage(String message, ChatConnection sender) {
         for(ChatConnection connection : this.connections) {
             String fullMessage;
 
-            //TODO: Print local time, not server time.
             DateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
             Date date = new Date();
             fullMessage = dateFormat.format(date) + " " + sender.getUsername() + ": " + message;
 
-            //Przeslanie wiadomosci po wczeniejsym dodaniu do niej aktualnej godziny i username'a klienta ktory nadał wiadomość.
             connection.getOutputPrintWriter().println(fullMessage);
+        }
+        archiveMessage(sender.getUsername(), message);
+    }
+
+    void sendSystemMessage(String message, ChatConnection receiver) {
+        String fullMessage = "\tSERVER INFO: " + message;
+        receiver.getOutputPrintWriter().println(fullMessage);
+    }
+
+    void sendSystemMessageToAll(String message) {
+        for(ChatConnection connection : this.connections) {
+            sendSystemMessage(message, connection);
         }
     }
 
-    //Metoda zamykająca instniejące połączenie.
     void closeConnection(ChatConnection chatConnection) {
-        //TODO: Add info for other users that someone left.
         System.out.println("Connection closed with user number: " + chatConnection.getUserNumber());
-        //Usunięcie połączenia z tablicy aktualnych połączeń
         this.connections.remove(chatConnection);
+    }
+
+    void connectToDB() {
+        try {
+            Class.forName("com.mysql.jdbc.Driver");
+            dbConnection = DriverManager.getConnection("jdbc:mysql://localhost/?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC", "mmop", "mmop2019");
+
+            Statement statement = dbConnection.createStatement();
+            String sqlString = "CREATE DATABASE IF NOT EXISTS MMOP;";
+            statement.execute(sqlString);
+            sqlString = "USE MMOP;";
+            statement.execute(sqlString);
+            sqlString = "CREATE TABLE IF NOT EXISTS Chat_History (MessageID int NOT NULL AUTO_INCREMENT, Username varchar(40), Message varchar(1023), PRIMARY KEY (MessageID));";
+            statement.execute(sqlString);
+
+
+        } catch (ClassNotFoundException | SQLException error) {
+            System.out.println("Server error: " + error.getMessage());
+        }
+    }
+
+    void archiveMessage(String sender, String message) {
+        try {
+            Statement statement = dbConnection.createStatement();
+            String sqlString = "INSERT INTO Chat_History (Username, Message) VALUES ('" + sender + "', '" + message + "');";
+            statement.execute(sqlString);
+        } catch (SQLException error) {
+            System.out.println("Server error: " + error.getMessage());
+        }
     }
 
 }
