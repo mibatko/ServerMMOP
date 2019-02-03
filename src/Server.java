@@ -43,6 +43,10 @@ public class Server {
 
                 sendSystemMessageToAll(newChatConnection.getUsername() + " joined MMOP server. Welcome! Current user count: " + newChatConnection.getNumberOfConnections());
 
+                if(connections.size() == 1) {
+                    switchDrawingClient();
+                }
+
                 Netcode netcode = new Netcode(this, newChatConnection);
                 netcode.start();
             }
@@ -68,6 +72,13 @@ public class Server {
     void sendSystemMessage(String message, ChatConnection receiver) {
         String fullMessage = "\tSERVER INFO: " + message;
         receiver.getOutputPrintWriter().println(fullMessage);
+    }
+
+    void switchDrawingClient() {
+        ChatConnection temp = connections.get(0);
+        connections.remove(0);
+        connections.add(temp);
+        sendSystemMessage("isDrawing=true", connections.get(0));
     }
 
     void sendSystemMessageToAll(String message) {
