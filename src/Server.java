@@ -13,6 +13,7 @@ public class Server {
     private int port;
     private List<ChatConnection> connections;
     private Connection dbConnection;
+    private String wordToGuess;
 
     private static final int DEFAULT_PORT = 60321;
 
@@ -24,6 +25,7 @@ public class Server {
     private Server(int port) {
         this.port = port;
         this.connections = new ArrayList<ChatConnection>();
+        this.wordToGuess = "No word selected";
     }
 
     private void startServer() {
@@ -42,6 +44,7 @@ public class Server {
                 this.connections.add(newChatConnection);
 
                 sendSystemMessageToAll(newChatConnection.getUsername() + " joined MMOP server. Welcome! Current user count: " + newChatConnection.getNumberOfConnections());
+                sendSystemMessage("Please remember to set your username by typing: \"/username <Your_Username>\"", newChatConnection);
 
                 if(connections.size() == 1) {
                     switchDrawingClient();
@@ -54,6 +57,11 @@ public class Server {
         catch(IOException error) {
             System.out.println("Server error: " + error.getMessage());
         }
+    }
+
+    void closeConnection(ChatConnection chatConnection) {
+        System.out.println("Connection closed with user number: " + chatConnection.getUserNumber());
+        this.connections.remove(chatConnection);
     }
 
     void sendChatMessage(String message, ChatConnection sender) {
@@ -70,15 +78,8 @@ public class Server {
     }
 
     void sendSystemMessage(String message, ChatConnection receiver) {
-        String fullMessage = "\tSERVER INFO: " + message;
+        String fullMessage = "SERVER INFO: " + message;
         receiver.getOutputPrintWriter().println(fullMessage);
-    }
-
-    void switchDrawingClient() {
-        ChatConnection temp = connections.get(0);
-        connections.remove(0);
-        connections.add(temp);
-        sendSystemMessage("isDrawing=true", connections.get(0));
     }
 
     void sendSystemMessageToAll(String message) {
@@ -87,9 +88,14 @@ public class Server {
         }
     }
 
-    void closeConnection(ChatConnection chatConnection) {
-        System.out.println("Connection closed with user number: " + chatConnection.getUserNumber());
-        this.connections.remove(chatConnection);
+    void switchDrawingClient() {
+        getNewWordToGuess();
+
+        ChatConnection temp = connections.get(0);
+        connections.remove(0);
+        connections.add(temp);
+        sendSystemMessage("It's your turn to draw! Your word: " + this.wordToGuess, connections.get(0));
+        sendSystemMessage("isDrawing=true", connections.get(0));
     }
 
     void connectToDB() {
@@ -119,6 +125,32 @@ public class Server {
         } catch (SQLException error) {
             System.out.println("Server error: " + error.getMessage());
         }
+    }
+
+    void getNewWordToGuess() {
+        try {
+            Statement statement = dbConnection.createStatement();
+            String sqlString = "SELECT word FROM mmop.words ORDER BY RAND() LIMIT 1;";
+            ResultSet rSet = statement.executeQuery(sqlString);
+            rSet.next();
+            this.wordToGuess = rSet.getString("word");
+        } catch (SQLException error) {
+            System.out.println("Server error: " + error.getMessage());
+        }
+    }
+
+    public String getWordToGuess() {
+        return wordToGuess;
+    }
+
+    public void clearCanvasForAll() {
+        sendSystemMessageToAll("clearCanvas=true");
+    }
+
+    public void endRound(ChatConnection winner) {
+        sendSystemMessageToAll(winner.getUsername() + " guessed the word: \"" + getWordToGuess() + "\". CONGRATULATIONS!");
+        clearCanvasForAll();
+        switchDrawingClient();
     }
 
 }

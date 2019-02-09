@@ -27,6 +27,12 @@ public class Netcode extends Thread {
                 else if(message.startsWith("/exit")) {
                     break;
                 }
+                else if(message.startsWith("DRAW_")) {
+                    server.sendSystemMessageToAll(message);
+                }
+                else if(message.equalsIgnoreCase(server.getWordToGuess())) {
+                    server.endRound(chatConnection);
+                }
                 else {
                     server.sendChatMessage(message, chatConnection);
                 }
